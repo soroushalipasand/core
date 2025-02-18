@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String        @id @default(uuid())
+  firstName   String?
+  lastName    String?
+  mobile      String        @unique
+  email       String?
+  password    String?
+  hasPassword Boolean       @default(false)
+  roleId      String
+  role        Role          @relation(fields: [roleId], references: [id])
+  isAdmin     Boolean       @default(false)
+  addresses   UserAddress[]
+  orders      Order[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("User")
+}
+
+model UserAddress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  addressLine String
+  city        String
+  state       String
+  postalCode  String
+  country     String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("UserAddress")
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  items         OrderItem[]
+  status        String      @default("Pending") // Example: Pending, Shipped, Delivered
+  totalPrice    Float
+  discountId    String?
+  discount      Discount?   @relation(fields: [discountId], references: [id])
+  addressLine   String
+  city          String
+  state         String
+  postalCode    String
+  country       String
+  reservedUntil DateTime? // Mojudi reserve shode ta in zaman
+  invoice       Invoice?    @relation(name: "InvoiceToOrder") // Only name defined here
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("Order")
+}
+
+model Invoice {
+  id          String   @id @default(uuid())
+  orderId     String   @unique
+  order       Order    @relation(name: "InvoiceToOrder", fields: [orderId], references: [id]) // Define fields and references here
+  totalAmount Float
+  status      String   @default("Pending") // Paid, Pending, etc.
+  issuedDate  DateTime @default(now())
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OrderItem {
+  id        String          @id @default(uuid())
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id])
+  variantId String
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+  quantity  Int
+  price     Float
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("OrderItem")
+}
+
+model Inventory {
+  id        String         @id @default(uuid())
+  variantId String         @unique
+  stock     Int            @default(0)
+  reserved  Int            @default(0)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  title       String           @unique
+  slug        String?
+  active      Boolean          @default(true)
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("Role")
+}
+
+model Permission {
+  id        String           @id @default(uuid())
+  title     String           @unique
+  slug      String?
+  active    Boolean          @default(true)
+  roles     RolePermission[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("Permission")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([roleId, permissionId])
+  @@map("RolePermission")
+}
+
+model Product {
+  id          String            @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  sku         String            @unique
+  slug        String?
+  active      Boolean           @default(true)
+  categories  ProductCategory[]
+  variants    ProductVariant[]
+  imageUrl    String?
+  imageUrls   String[]          @default([]) // Replace imageUrl with imageUrls array
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  // OrderItem   OrderItem[]
+
+  @@map("Product")
+}
+
+model Category {
+  id          String            @id @default(uuid())
+  title       String            @unique
+  faTitle     String
+  description String?
+  isActive    Boolean           @default(true)
+  imageUrl    String?
+  parentId    String?
+  parent      Category?         @relation("CategorySelfRelation", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  children    Category[]        @relation("CategorySelfRelation")
+  products    ProductCategory[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("Category")
+}
+
+model ProductCategory {
+  id         String   @id @default(uuid())
+  productId  String
+  categoryId String
+  product    Product  @relation(fields: [productId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productId, categoryId])
+  @@map("ProductCategory")
+}
+
+model Attribute {
+  id        String           @id @default(uuid())
+  title     String           @unique
+  faTitle   String
+  values    AttributeValue[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("Attribute")
+}
+
+model AttributeValue {
+  id                   String           @id @default(uuid())
+  value                String
+  attributeId          String
+  attribute            Attribute        @relation(fields: [attributeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sizeProductVariants  ProductVariant[] @relation("SizeRelation")
+  colorProductVariants ProductVariant[] @relation("ColorRelation")
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@map("AttributeValue")
+}
+
+model ProductVariant {
+  id        String          @id @default(uuid())
+  productId String
+  sizeId    String?
+  colorId   String?
+  price     Float?
+  sku       String          @unique @default("")
+  product   Product         @relation(fields: [productId], references: [id])
+  size      AttributeValue? @relation("SizeRelation", fields: [sizeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  color     AttributeValue? @relation("ColorRelation", fields: [colorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  discounts Discount[]      @relation("VariantDiscount")
+  Inventory Inventory?
+  OrderItem OrderItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([productId, sizeId, colorId])
+  @@map("ProductVariant")
+}
+
+model Discount {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  description     String?
+  percentage      Float? // Percentage discount
+  fixedAmount     Float? // Fixed discount amount
+  active          Boolean          @default(true)
+  startDate       DateTime?
+  endDate         DateTime?
+  productVariants ProductVariant[] @relation("VariantDiscount")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  Order           Order[]
+
+  @@map("Discount")
+}
+
+model Post {
+  id            String   @id @default(uuid())
+  wpId          Int      @unique // Unique WordPress post ID
+  title         String // Post title
+  description   String // Post content (HTML)
+  link          String
+  featuredImage String? // URL for the featured image (optional)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) // When the post was added to your DB
+  updatedAt     DateTime @updatedAt // Automatically updates on edit
+
+  @@map("Post")
+}
